@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-time Object Detection with TTS</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        video { border: 2px solid #333; border-radius: 10px; }
+        #detected { margin-top: 20px; font-size: 1.5em; color: #333; }
+        #helpingMode { font-size: 1.5em; color: #4CAF50; font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Real-time Object Detection with Text-to-Speech</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    <div id="detected">Detecting objects...</div>
+    <div id="helpingMode" style="display: none;">Helping Mode Activated</div>
+
+    <script>
+        // Access the client's camera
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const helpingModeDiv = document.getElementById('helpingMode');
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error accessing camera: ", err);
+            });
+
+        // Function to capture frame and send to server
+        function sendFrame() {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+                const formData = new FormData();
+                formData.append('frame', blob, 'frame.jpg');
+
+                fetch('/process_frame', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const detectedDiv = document.getElementById('detected');
+                    if (data.objects) {
+                        detectedDiv.textContent = 'Detected: ' + data.objects;
+
+                        // Use Web Speech API for TTS
+                        const utterance = new SpeechSynthesisUtterance('I see ' + data.objects);
+                        window.speechSynthesis.speak(utterance);
+                    } else {
+                        detectedDiv.textContent = 'No objects detected';
+                    }
+                });
+            }, 'image/jpeg');
+        }
+
+        // Send frame to the server every 3 seconds
+        setInterval(sendFrame, 3000);
+
+        // Show Helping Mode message when page loads
+        window.onload = function() {
+            // Show "Helping Mode Activated" message on the page
+            helpingModeDiv.style.display = 'block';
+
+            // Delay the TTS to ensure everything is ready
+            setTimeout(function() {
+                // Use Web Speech API to speak "Helping Mode Activated"
+                const utterance = new SpeechSynthesisUtterance('Helping Mode Activated');
+                window.speechSynthesis.speak(utterance);
+
+                // After the TTS finishes, start detecting objects
+                utterance.onend = function() {
+                    helpingModeDiv.style.display = 'none';  // Hide the message
+                    sendFrame();  // Start detecting objects
+                };
+            }, 500);  // Delay TTS for 500ms to ensure everything is loaded properly
+        };
+
+        // Listen for keydown event to trigger redirection
+        window.addEventListener('keydown', (event) => {
+            // You can check for specific keys by their keyCode or key property.
+            // For example, `Escape` (Esc) key code is 27.
+            if (event.key === 'Escape') {
+                window.location.href = 'site.html'; // Redirect to site.html
+            }
+        });
+    </script>
+</body>
+</html>
